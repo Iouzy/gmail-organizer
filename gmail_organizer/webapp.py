@@ -25,6 +25,23 @@ from .rules import RuleError, RuleSet
 WEB_ROOT = Path(__file__).parent / "web"
 EXAMPLE_RULES = Path(__file__).parent.parent / "rules.example.yaml"
 
+# How long to wait for the user to finish at the Google consent screen.
+AUTH_TIMEOUT = 300
+
+
+def auth_error_message(exc: Exception) -> str:
+    """Turn an OAuth failure into something worth reading."""
+    text = str(exc)
+    if isinstance(exc, TimeoutError) or "timed out" in text.lower():
+        return (
+            "A autorização demorou demasiado. Se a janela do Google não chegou "
+            "a abrir, procura o link na janela preta que abriu o programa e "
+            "cola-o no browser. Depois carrega outra vez em Autorizar."
+        )
+    if "access_denied" in text:
+        return "A Google recusou o pedido. Confirma que a tua conta está como utilizador de teste no projeto."
+    return f"Não consegui ligar: {text}"
+
 
 class AppError(Exception):
     """An error worth showing to the user as-is."""
@@ -46,6 +63,10 @@ class AppState:
         self._client = None
         self._email: str | None = None
         self.preview: dict[str, Change] = {}
+        # The Google consent screen happens in a background thread so the page
+        # keeps talking to us while the user is over in the browser window.
+        self.auth: dict[str, str | None] = {"status": "idle", "error": None}
+        self._auth_thread: threading.Thread | None = None
 
     # --- rules ------------------------------------------------------------
 
@@ -92,7 +113,31 @@ class AppState:
                 return None
         return self._email
 
+    def start_auth(self) -> dict:
+        """Kick off the OAuth consent flow, or report the one already running."""
+        if self._auth_thread and self._auth_thread.is_alive():
+            return self.auth
+        if not self.has_credentials:
+            raise AppError("Falta o ficheiro credentials.json. Carrega-o no primeiro passo.", 409)
+
+        self._client = None
+        self._email = None
+        self.auth = {"status": "waiting", "error": None}
+        self._auth_thread = threading.Thread(target=self._auth_worker, daemon=True)
+        self._auth_thread.start()
+        return self.auth
+
+    def _auth_worker(self) -> None:
+        try:
+            from .auth import get_credentials
+
+            get_credentials(self.credentials_path, self.token_path, timeout_seconds=AUTH_TIMEOUT)
+            self.auth = {"status": "done", "error": None}
+        except Exception as exc:  # noqa: BLE001 - whatever went wrong, the page shows it
+            self.auth = {"status": "error", "error": auth_error_message(exc)}
+
     def disconnect(self) -> None:
+        self.auth = {"status": "idle", "error": None}
         self._client = None
         self._email = None
         if os.path.exists(self.token_path):
@@ -179,6 +224,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(self._status())
             elif route == "/api/rules":
                 self._send_json(self.state.load_rules().to_data())
+            elif route == "/api/auth-state":
+                self._send_json({**self.state.auth, **self._status()})
             elif route == "/api/labels":
                 self._check_token()
                 self._send_json({"labels": sorted(self.state.client().labels())})
@@ -254,11 +301,8 @@ class Handler(BaseHTTPRequestHandler):
         return self._status()
 
     def _connect(self) -> dict:
-        with self.state.lock:
-            self.state._client = None
-            self.state._email = None
-            self.state.client()  # triggers the browser consent screen
-        return self._status()
+        """Start the consent flow and return immediately — the page polls."""
+        return {**self.state.start_auth(), **self._status()}
 
     def _save_rules(self) -> dict:
         data = self._read_json()

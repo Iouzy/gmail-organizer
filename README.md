@@ -122,11 +122,16 @@ Vê o `rules.example.yaml` para o conjunto completo de condições e ações.
 ## Testes
 
 ```bash
+pip install -r requirements-dev.txt
+python -m playwright install chromium   # só para os testes de browser
 python -m pytest
 ```
 
-40 testes, todos sem rede e sem credenciais — o Gmail é substituído por um
-duplo, incluindo nos testes da app web.
+48 testes, todos sem rede e sem credenciais — o Gmail é substituído por um
+duplo. Oito deles abrem a página num Chromium a sério e clicam nela: é o que
+apanha os erros que nenhum teste de API vê, como uma regra de CSS a anular o
+atributo `hidden` e deixar o véu de carregamento por cima da página. Os testes
+de browser saltam-se sozinhos se o Playwright não estiver instalado.
 
 ## Estrutura
 
@@ -142,4 +147,5 @@ gmail_organizer/
   web/             a interface (HTML, CSS, JS — sem dependências)
   cli.py           ui / check / run / labels
   auth.py          OAuth de app desktop
+tests/             motor de regras, API da app, e a página num browser real
 ```

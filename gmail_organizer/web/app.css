@@ -32,6 +32,10 @@
 
 * { box-sizing: border-box; }
 
+/* The hidden attribute is set by a weak browser rule, so any class below that
+   sets display would quietly beat it. This keeps hidden meaning hidden. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -234,6 +238,7 @@ legend { padding: 0 6px; }
 }
 .toast.error { background: var(--danger); color: #fff; }
 
+.blocker p { margin: 0; max-width: 34ch; text-align: center; }
 .blocker {
   position: fixed; inset: 0; z-index: 30;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;

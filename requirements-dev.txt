@@ -1,0 +1,5 @@
+# Para correr os testes: python -m pytest
+pytest>=8.0
+# Opcional: os testes que abrem a página num browser a sério.
+# Depois de instalar, corre também: python -m playwright install chromium
+playwright>=1.40

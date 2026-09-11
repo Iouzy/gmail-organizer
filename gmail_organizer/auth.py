@@ -18,6 +18,7 @@ DEFAULT_TOKEN = "token.json"
 def get_credentials(
     credentials_path: str = DEFAULT_CREDENTIALS,
     token_path: str = DEFAULT_TOKEN,
+    timeout_seconds: int | None = None,
 ) -> Credentials:
     creds = None
     if os.path.exists(token_path):
@@ -36,7 +37,16 @@ def get_credentials(
                 "and download the JSON to that path."
             )
         flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
-        creds = flow.run_local_server(port=0)
+        creds = flow.run_local_server(
+            port=0,
+            timeout_seconds=timeout_seconds,
+            authorization_prompt_message=(
+                "Se a janela do browser não abriu sozinha, abre este endereço:\n{url}"
+            ),
+            success_message="Autorizado. Já podes fechar este separador e voltar ao Gmail Organizer.",
+        )
+        if creds is None:
+            raise TimeoutError("a autorização não chegou a tempo")
 
     with open(token_path, "w", encoding="utf-8") as handle:
         handle.write(creds.to_json())
@@ -47,6 +57,7 @@ def get_credentials(
 def build_service(
     credentials_path: str = DEFAULT_CREDENTIALS,
     token_path: str = DEFAULT_TOKEN,
+    timeout_seconds: int | None = None,
 ):
-    creds = get_credentials(credentials_path, token_path)
+    creds = get_credentials(credentials_path, token_path, timeout_seconds)
     return build("gmail", "v1", credentials=creds, cache_discovery=False)

@@ -47,19 +47,34 @@ const $ = (id) => document.getElementById(id);
 
 /* --- comunicação com o servidor -------------------------------------- */
 
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      "X-Organizer-Token": TOKEN,
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers || {}),
-    },
-  });
+async function api(path, options = {}, timeoutMs = 60000) {
+  // Without a deadline a stalled request would leave the page spinning forever.
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
+  let response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      signal: abort.signal,
+      headers: {
+        "X-Organizer-Token": TOKEN,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers || {}),
+      },
+    });
+  } catch (err) {
+    throw new Error(err.name === "AbortError"
+      ? "O programa não respondeu. Fecha a janela preta e abre outra vez."
+      : "Perdi a ligação ao programa. Ele ainda está a correr?");
+  } finally {
+    clearTimeout(timer);
+  }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || `erro ${response.status}`);
   return payload;
 }
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(body || {}) });
 
@@ -72,10 +87,16 @@ function toast(message, isError = false) {
   toast.timer = setTimeout(() => { el.hidden = true; }, isError ? 6000 : 2500);
 }
 
-function blocking(text) {
+function blocking(text, onCancel = null) {
   $("blocker-text").textContent = text;
+  const cancel = $("blocker-cancel");
+  cancel.hidden = !onCancel;
+  cancel.onclick = onCancel;
   $("blocker").hidden = false;
-  return () => { $("blocker").hidden = true; };
+  return () => {
+    $("blocker").hidden = true;
+    cancel.onclick = null;
+  };
 }
 
 /* --- arranque -------------------------------------------------------- */
@@ -469,11 +490,24 @@ function wireSetup() {
 
   $("btn-connect").addEventListener("click", async () => {
     $("connect-hint").hidden = false;
-    const done = blocking("À espera da autorização no browser…");
+    let cancelled = false;
+    const done = blocking(
+      "Autoriza na janela do Google que acabou de abrir. Volta aqui quando terminares.",
+      () => { cancelled = true; },
+    );
     try {
       await post("/api/connect");
-      await refreshStatus();
-      toast("Conta ligada.");
+      // The consent screen runs in the background; ask how it is going.
+      while (!cancelled) {
+        await sleep(1500);
+        const auth = await api("/api/auth-state");
+        if (auth.status === "error") throw new Error(auth.error);
+        if (auth.status === "done" || auth.connected) {
+          await refreshStatus();
+          toast("Conta ligada.");
+          return;
+        }
+      }
     } catch (err) {
       toast(err.message, true);
     } finally {
