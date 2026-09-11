@@ -1,0 +1,83 @@
+# Copy to rules.yaml and edit. Rules run top to bottom for every message;
+# `stop: true` ends the chain for that message.
+#
+# Everything here is deterministic — no model, no guessing. If two people run
+# the same rules over the same mailbox they get the same mailbox back.
+
+# Which messages to scan. Any Gmail search query works.
+search: "in:inbox"
+
+# Safety cap per run.
+max_messages: 500
+
+# Destructive actions are off unless you flip this. Keep it false.
+allow_trash: false
+
+rules:
+  # --- O que tem de continuar à vista ------------------------------------
+  - name: "Chefe e família nunca são arquivados"
+    match:
+      from:
+        - chefe@empresa.com
+        - mae@gmail.com
+    actions:
+      star: true
+      stop: true            # nothing below can touch these
+
+  - name: "Dirigido a mim, não a uma lista"
+    match:
+      to: eu@exemplo.com
+      is_list: false
+    actions:
+      add_labels: ["Direto"]
+      stop: true
+
+  # --- Newsletters e listas ------------------------------------
+  - name: "Newsletters fora da caixa de entrada"
+    match:
+      is_list: true
+    actions:
+      add_labels: ["Newsletters"]
+      archive: true
+
+  - name: "Notificações do GitHub"
+    match:
+      from: notifications@github.com
+    actions:
+      add_labels: ["Dev/GitHub"]
+      archive: true
+      mark_read: true
+
+  # --- Recibos e faturas --------------------------------------------
+  - name: "Recibos e faturas"
+    match:
+      any_of:
+        - subject_contains: ["recibo", "fatura", "invoice", "receipt", "encomenda"]
+        - from: ["faturas.pt", "billing@", "no-reply@stripe.com"]
+    actions:
+      add_labels: ["Finanças/Recibos"]
+      archive: true
+
+  # --- Ruído -------------------------------------------------------------
+  - name: "Promoções com mais de uma semana"
+    match:
+      has_label: ["CATEGORY_PROMOTIONS"]
+      older_than_days: 7
+    actions:
+      archive: true
+      mark_read: true
+
+  - name: "Anexos pesados marcados para limpeza"
+    match:
+      larger_than: 10M
+      older_than_days: 90
+    actions:
+      add_labels: ["Limpeza/Pesados"]
+
+  # --- Regex quando o texto simples não chega ------------------------------
+  - name: "Alertas automáticos"
+    match:
+      subject_regex: "^\\[(ALERT|ALARM|CRITICAL)\\]"
+    actions:
+      add_labels: ["Alertas"]
+      star: true
