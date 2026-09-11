@@ -1,70 +1,112 @@
-# gmail-organizer
+# Gmail Organizer
 
-Organizador de Gmail baseado em regras. Sem IA, sem adivinhação: um porteiro com
-uma lista colada à parede — olha para o remetente e o assunto, compara com a
-lista, carimba. A mesma caixa de entrada dá sempre o mesmo resultado.
+Arruma a caixa de entrada por **regras fixas**, não por adivinhação. É um
+porteiro com uma lista colada à parede: olha para o remetente e o assunto,
+compara com a lista, carimba. A mesma caixa de entrada dá sempre o mesmo
+resultado.
 
-## Porquê não usar os filtros do Gmail
+Tudo se faz a clicar, numa página que corre no teu computador.
 
-Os filtros nativos não têm ordem garantida, não têm `stop`, não fazem regex e
-vivem trancados na interface web. Aqui as regras são um ficheiro YAML: versionado,
-revisível, testável, e com `--apply` obrigatório para tocar na conta.
-
-## Instalação
-
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+```
+┌───────────────────────────────┬────────────────────────────────────────┐
+│  Regras                       │  Pré-visualizar                        │
+│  1. Chefe → estrela, parar    │  ☑ noticias@jornal.pt                  │
+│  2. Newsletters → arquivar    │     Edição de hoje   + Newsletters −📥  │
+│  3. Recibos → Finanças        │  ☑ faturas@edp.pt                      │
+│  [+ Nova regra]               │     Fatura de julho  + Finanças  −📥   │
+│                               │            [ Aplicar a 2 ]             │
+└───────────────────────────────┴────────────────────────────────────────┘
 ```
 
-## Credenciais (uma vez)
+## Abrir
 
-1. Vai a https://console.cloud.google.com/ e cria um projeto.
+1. Descarrega ou clona esta pasta.
+2. **Duplo-clique** em `Abrir Gmail Organizer.command` (macOS/Linux) ou
+   `Abrir Gmail Organizer.bat` (Windows).
+3. Na primeira vez prepara sozinho o ambiente (um minuto) e depois abre o
+   browser em `http://127.0.0.1:8765`.
+
+Precisas de ter o [Python 3.10+](https://www.python.org/downloads/) instalado.
+No Windows, marca **Add Python to PATH** durante a instalação.
+
+## Ligar a conta (só na primeira vez)
+
+A própria página explica os passos, mas em resumo:
+
+1. [Consola da Google Cloud](https://console.cloud.google.com/projectcreate) → cria um projeto.
 2. *APIs & Services → Library* → ativa a **Gmail API**.
-3. *APIs & Services → Credentials* → **Create credentials → OAuth client ID** →
-   tipo **Desktop app**.
-4. Descarrega o JSON e guarda-o como `credentials.json` na raiz do projeto.
-5. Na primeira execução abre o browser para autorizares; o token fica em
-   `token.json` (modo 600) e é renovado sozinho a partir daí.
+3. *Credentials → Create credentials → OAuth client ID* → tipo **Desktop app**.
+4. Descarrega o JSON e **larga-o na página**.
+5. Clica em **Autorizar no Google** e dá permissão na janela que abre.
 
-Âmbito pedido: `gmail.modify` — mexe em etiquetas, nunca lê o corpo das mensagens
-nem envia nada. O programa só pede os cabeçalhos (`From`, `To`, `Subject`,
-`Date`, `List-Id`), nunca o conteúdo.
+Fica tudo no teu computador: o `credentials.json` e o `token.json` ao lado do
+programa, e o servidor só aceita ligações de `127.0.0.1`. O programa pede o
+âmbito `gmail.modify` (mexer em etiquetas) e lê apenas os cabeçalhos
+`From`, `To`, `Subject`, `Date` e `List-Id` — nunca o corpo das mensagens.
 
-`credentials.json`, `token.json` e `rules.yaml` estão no `.gitignore`.
+## Usar
 
-## Utilização
+**Regras** (coluna esquerda) — `+ Nova regra` abre um formulário:
 
-```bash
-cp rules.example.yaml rules.yaml     # edita à tua medida
+- **Aplicar quando…** escolhes se têm de bater *todas* as condições ou
+  *qualquer uma* delas, e acrescentas as condições que quiseres.
+- **Então…** etiquetas a pôr ou tirar, arquivar, marcar lida, estrela, lixo.
+- **Parar aqui** fecha a porta às regras seguintes para aquela mensagem.
 
-python -m gmail_organizer check      # valida o ficheiro, não toca no Gmail
-python -m gmail_organizer run        # DRY RUN: mostra o que faria
-python -m gmail_organizer run --apply  # aplica mesmo
-python -m gmail_organizer labels     # lista as etiquetas da conta
-```
+As regras correm de cima para baixo — usa as setas ↑↓ para as ordenares. As
+exceções ("o chefe nunca é arquivado") vão no topo, com *parar aqui*.
 
-Opções úteis do `run`:
+**Pré-visualizar** (coluna direita) — mostra, mensagem a mensagem, o que ia
+acontecer. Nada muda enquanto não carregares em **Aplicar**, e podes
+desmarcar as que não queres.
 
-| Flag | Efeito |
+Tudo o que fizeres é guardado em `rules.yaml`, ao lado do programa.
+
+### Condições disponíveis
+
+| Condição | Exemplo |
 |---|---|
-| `--apply` | sem isto, nada é alterado |
-| `--limit N` | limita as mensagens analisadas |
-| `--search "..."` | ignora o `search` do ficheiro (ex.: `"in:inbox is:unread"`) |
-| `-v` | lista mensagem a mensagem |
+| Remetente é ou contém / NÃO é | `chefe@empresa.com`, `banco.pt` |
+| Para (ou em cópia), Em cópia | `eu@exemplo.com` |
+| Remetente (regex) | `^no-?reply@` |
+| Assunto contém | `fatura, recibo, encomenda` |
+| Assunto (regex) | `^\[ALERT\]` |
+| List-Id contém | `github.com` |
+| É newsletter ou lista | sim / não |
+| Tem / não tem a etiqueta | `CATEGORY_PROMOTIONS` |
+| Está por ler, tem estrela, está na caixa de entrada | sim / não |
+| Mais antiga / mais recente que (dias) | `7` |
+| Maior que | `10M` |
 
-Começa sempre por um dry run estreito:
+### Segurança
+
+- **Nada acontece sem confirmação.** Pré-visualizas, escolhes, aplicas.
+- **O lixo é opt-in duplo:** tens de ligar *Permitir enviar para o lixo* nas
+  definições *e* escolher essa ação na regra. Um erro num padrão não pode
+  esvaziar uma caixa de entrada.
+- **Limite por execução** trava uma regra demasiado larga.
+- Arquivar e etiquetar é sempre reversível; o lixo fica recuperável 30 dias.
+
+## Linha de comandos (opcional)
+
+O motor é o mesmo; a página é só uma casca por cima.
 
 ```bash
-python -m gmail_organizer run --search "in:inbox newer_than:7d" --limit 50
+python -m gmail_organizer ui       # abre a app no browser
+python -m gmail_organizer check    # valida o rules.yaml, não toca no Gmail
+python -m gmail_organizer run      # dry run: mostra o que faria
+python -m gmail_organizer run --apply
+python -m gmail_organizer labels   # lista as etiquetas da conta
 ```
 
-## O ficheiro de regras
+O `run` aceita `--limit N`, `--search "in:inbox is:unread"` e `-v`.
+
+Um `rules.yaml` é simplesmente:
 
 ```yaml
-search: "in:inbox"      # que mensagens analisar (sintaxe de pesquisa do Gmail)
-max_messages: 500       # travão por execução
-allow_trash: false      # ações destrutivas são opt-in para o ficheiro inteiro
+search: "in:inbox"
+max_messages: 500
+allow_trash: false
 
 rules:
   - name: "Newsletters fora da caixa de entrada"
@@ -75,79 +117,29 @@ rules:
       archive: true
 ```
 
-As regras correm **de cima para baixo** para cada mensagem. Todas as que
-combinam acumulam ações; `stop: true` corta a cadeia ali. Por isso as exceções
-("o chefe nunca é arquivado") vão no topo.
-
-### Condições (`match`)
-
-Dentro de um bloco `match` é tudo **E** — todas têm de ser verdade.
-
-| Condição | Exemplo | Nota |
-|---|---|---|
-| `from` / `not_from` | `["chefe@empresa.com", "banco.pt"]` | endereço completo, domínio, ou parte |
-| `to` / `cc` | `eu@exemplo.com` | `to` também procura no Cc |
-| `from_regex` | `"^no-?reply@"` | sobre o cabeçalho `From` inteiro |
-| `subject_contains` | `["fatura", "recibo"]` | qualquer um serve; ignora maiúsculas |
-| `subject_regex` | `"^\\[ALERT\\]"` | ignora maiúsculas |
-| `list_id` | `["github.com"]` | parte do cabeçalho `List-Id` |
-| `is_list` | `true` | tem `List-Id` ou `List-Unsubscribe` |
-| `has_label` / `not_label` | `["CATEGORY_PROMOTIONS"]` | IDs do sistema ou nomes de etiquetas |
-| `is_unread`, `is_starred`, `in_inbox` | `true` | |
-| `older_than_days` / `newer_than_days` | `7` | |
-| `larger_than` | `10M` | aceita `500k`, `2.5m`, bytes |
-| `any_of` | lista de blocos | **OU** entre blocos |
-
-`any_of` é a válvula de escape quando precisas de "isto **ou** aquilo":
-
-```yaml
-match:
-  any_of:
-    - subject_contains: ["fatura", "recibo"]
-    - from: ["no-reply@stripe.com"]
-```
-
-### Ações
-
-| Ação | Efeito |
-|---|---|
-| `add_labels: ["Trabalho/Clientes"]` | cria a etiqueta (e as pais) se não existir |
-| `remove_labels: [...]` | nunca cria uma etiqueta só para a tirar |
-| `archive: true` | tira do `INBOX` |
-| `mark_read` / `mark_unread` | |
-| `star` / `unstar` | |
-| `trash: true` | exige `allow_trash: true` no topo do ficheiro |
-| `stop: true` | não corre mais nenhuma regra para esta mensagem |
-
-Um `enabled: false` na regra desliga-a sem a apagares.
-
-## Segurança
-
-- **Dry run por omissão.** Só `--apply` escreve.
-- **`trash` é opt-in duplo:** a flag no ficheiro *e* a ação na regra. Um erro de
-  escrita num padrão não pode esvaziar uma caixa de entrada.
-- **`max_messages`** limita o estrago de uma regra demasiado larga.
-- Nada é apagado em definitivo: arquivar e etiquetar é reversível, e o lixo
-  fica recuperável 30 dias.
+Vê o `rules.example.yaml` para o conjunto completo de condições e ações.
 
 ## Testes
 
 ```bash
-pip install pytest
 python -m pytest
 ```
 
-Os testes do motor de regras e do organizador correm sem rede e sem
-credenciais — o cliente do Gmail é substituído por um duplo.
+40 testes, todos sem rede e sem credenciais — o Gmail é substituído por um
+duplo, incluindo nos testes da app web.
 
 ## Estrutura
 
 ```
+Abrir Gmail Organizer.command   arranque com duplo-clique (macOS/Linux)
+Abrir Gmail Organizer.bat       idem, Windows
 gmail_organizer/
   message.py       normaliza a resposta da API numa view útil
-  rules.py         YAML -> regras -> plano de alterações (lógica pura)
+  rules.py         YAML <-> regras -> plano de alterações (lógica pura)
   gmail_client.py  pesquisa, hidratação em lote, batchModify, retries
   organizer.py     junta tudo, agrupa alterações iguais num só pedido
-  cli.py           check / run / labels
+  webapp.py        servidor local: só 127.0.0.1, token por sessão
+  web/             a interface (HTML, CSS, JS — sem dependências)
+  cli.py           ui / check / run / labels
   auth.py          OAuth de app desktop
 ```

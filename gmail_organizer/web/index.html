@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gmail Organizer</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-token="__TOKEN__">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true"></span>
+    <div>
+      <h1>Gmail Organizer</h1>
+      <p class="tagline">Regras fixas, sem adivinhação.</p>
+    </div>
+  </div>
+  <div class="account">
+    <span id="account-chip" class="chip chip--muted">a verificar…</span>
+    <button id="btn-disconnect" class="btn btn--ghost" hidden>Desligar conta</button>
+  </div>
+</header>
+
+<main>
+  <!-- Passo 1 -------------------------------------------------------- -->
+  <section id="setup" class="card setup" hidden>
+    <h2>Ligar a tua conta Google</h2>
+    <ol class="steps">
+      <li>Abre a <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noreferrer">consola da Google Cloud</a> e cria um projeto.</li>
+      <li>Em <em>APIs &amp; Services → Library</em>, ativa a <strong>Gmail API</strong>.</li>
+      <li>Em <em>Credentials → Create credentials → OAuth client ID</em>, escolhe o tipo <strong>Desktop app</strong>.</li>
+      <li>Descarrega o ficheiro JSON e larga-o aqui em baixo.</li>
+    </ol>
+
+    <div id="dropzone" class="dropzone" tabindex="0" role="button">
+      <strong>Larga aqui o ficheiro JSON</strong>
+      <span>ou clica para o escolher</span>
+      <input type="file" id="file-credentials" accept="application/json,.json" hidden>
+    </div>
+
+    <p class="muted small">O ficheiro fica só no teu computador, ao lado deste programa. Nada é enviado para lado nenhum.</p>
+
+    <button id="btn-connect" class="btn btn--primary btn--big" disabled>Autorizar no Google</button>
+    <p id="connect-hint" class="muted small" hidden>Abre-se uma janela do browser para deres permissão. Volta aqui quando terminares.</p>
+  </section>
+
+  <!-- Aplicação ------------------------------------------------------ -->
+  <div id="app" class="layout" hidden>
+
+    <!-- Regras ------------------------------------------------------- -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Regras</h2>
+        <button id="btn-new-rule" class="btn btn--primary">+ Nova regra</button>
+      </div>
+      <p class="muted small">Correm de cima para baixo. A primeira que disser <em>parar aqui</em> fecha a porta às seguintes.</p>
+      <div id="rules-list" class="rules"></div>
+      <div id="rules-empty" class="empty" hidden>Ainda não há regras. Cria a primeira.</div>
+    </section>
+
+    <!-- Pré-visualização --------------------------------------------- -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Pré-visualizar</h2>
+        <button id="btn-preview" class="btn btn--primary">Ver o que ia acontecer</button>
+      </div>
+
+      <div class="settings">
+        <label>
+          <span>Que mensagens analisar</span>
+          <input id="search" type="text" placeholder="in:inbox">
+        </label>
+        <label class="narrow">
+          <span>No máximo</span>
+          <input id="max-messages" type="number" min="1" max="5000" step="10">
+        </label>
+        <label class="toggle">
+          <input id="allow-trash" type="checkbox">
+          <span>Permitir enviar para o lixo</span>
+        </label>
+      </div>
+
+      <div id="preview-summary" class="summary" hidden></div>
+
+      <div id="preview-actions" class="preview-actions" hidden>
+        <label class="toggle">
+          <input id="select-all" type="checkbox" checked>
+          <span>Selecionar todas</span>
+        </label>
+        <button id="btn-apply" class="btn btn--danger">Aplicar</button>
+      </div>
+
+      <div id="preview-table" class="preview"></div>
+      <div id="preview-empty" class="empty">Carrega em <strong>Ver o que ia acontecer</strong>. Nada é alterado até carregares em <strong>Aplicar</strong>.</div>
+    </section>
+  </div>
+</main>
+
+<!-- Editor de regra ------------------------------------------------- -->
+<dialog id="rule-dialog">
+  <form id="rule-form" method="dialog">
+    <h2 id="rule-dialog-title">Nova regra</h2>
+
+    <label class="field">
+      <span>Nome</span>
+      <input id="rule-name" type="text" required placeholder="Newsletters fora da caixa de entrada">
+    </label>
+
+    <fieldset class="field">
+      <legend>Aplicar quando…</legend>
+      <div class="radios">
+        <label><input type="radio" name="match-mode" value="all" checked> todas as condições</label>
+        <label><input type="radio" name="match-mode" value="any"> qualquer uma das condições</label>
+      </div>
+      <div id="conditions"></div>
+      <button type="button" id="btn-add-condition" class="btn btn--ghost">+ Condição</button>
+      <p id="advanced-warning" class="warning" hidden>Esta regra usa condições avançadas escritas à mão no ficheiro. São mantidas tal como estão.</p>
+    </fieldset>
+
+    <fieldset class="field">
+      <legend>Então…</legend>
+      <label class="field">
+        <span>Pôr estas etiquetas</span>
+        <input id="act-add-labels" type="text" list="label-list" placeholder="Newsletters, Finanças/Recibos">
+      </label>
+      <label class="field">
+        <span>Tirar estas etiquetas</span>
+        <input id="act-remove-labels" type="text" list="label-list" placeholder="">
+      </label>
+      <div class="checks">
+        <label class="toggle"><input type="checkbox" id="act-archive"><span>Arquivar (tirar da caixa de entrada)</span></label>
+        <label class="toggle"><input type="checkbox" id="act-mark_read"><span>Marcar como lida</span></label>
+        <label class="toggle"><input type="checkbox" id="act-mark_unread"><span>Marcar como não lida</span></label>
+        <label class="toggle"><input type="checkbox" id="act-star"><span>Pôr estrela</span></label>
+        <label class="toggle"><input type="checkbox" id="act-unstar"><span>Tirar estrela</span></label>
+        <label class="toggle danger"><input type="checkbox" id="act-trash"><span>Enviar para o lixo</span></label>
+        <label class="toggle"><input type="checkbox" id="act-stop"><span>Parar aqui: não correr mais regras nesta mensagem</span></label>
+      </div>
+    </fieldset>
+
+    <p id="rule-error" class="warning" hidden></p>
+
+    <menu class="dialog-actions">
+      <button type="button" id="btn-cancel-rule" class="btn btn--ghost">Cancelar</button>
+      <button type="submit" class="btn btn--primary">Guardar regra</button>
+    </menu>
+  </form>
+</dialog>
+
+<datalist id="label-list"></datalist>
+<div id="toast" class="toast" hidden></div>
+<div id="blocker" class="blocker" hidden><div class="spinner"></div><p id="blocker-text"></p></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

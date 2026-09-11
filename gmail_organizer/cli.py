@@ -92,6 +92,19 @@ def cmd_labels(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ui(args: argparse.Namespace) -> int:
+    from .webapp import serve
+
+    serve(
+        rules_path=args.rules,
+        credentials_path=args.credentials,
+        token_path=args.token,
+        port=args.port,
+        open_browser=not args.no_browser,
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gmail-organizer",
@@ -109,6 +122,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--search", default=None, help="override the search query from the rules file")
     run.add_argument("-v", "--verbose", action="store_true", help="list every affected message")
     run.set_defaults(func=cmd_run)
+
+    ui = sub.add_parser("ui", help="open the point-and-click app in the browser")
+    ui.add_argument("--port", type=int, default=8765, help="local port (default: 8765)")
+    ui.add_argument("--no-browser", action="store_true", help="do not open a browser window")
+    ui.set_defaults(func=cmd_ui)
 
     check = sub.add_parser("check", help="validate the rules file without touching Gmail")
     check.set_defaults(func=cmd_check)

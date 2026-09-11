@@ -204,6 +204,18 @@ class Actions:
         return actions
 
 
+    def to_data(self) -> dict[str, Any]:
+        data: dict[str, Any] = {}
+        if self.add_labels:
+            data["add_labels"] = list(self.add_labels)
+        if self.remove_labels:
+            data["remove_labels"] = list(self.remove_labels)
+        for flag in ("archive", "mark_read", "mark_unread", "star", "unstar", "trash", "stop"):
+            if getattr(self, flag):
+                data[flag] = True
+        return data
+
+
 @dataclass
 class Rule:
     name: str
@@ -261,6 +273,10 @@ class RuleSet:
     def load(cls, path: str) -> "RuleSet":
         with open(path, "r", encoding="utf-8") as handle:
             data = yaml.safe_load(handle) or {}
+        return cls.from_data(data)
+
+    @classmethod
+    def from_data(cls, data: Any) -> "RuleSet":
         if not isinstance(data, dict):
             raise RuleError("rules file must be a mapping with a 'rules' key")
         raw_rules = data.get("rules")
@@ -284,6 +300,33 @@ class RuleSet:
             max_messages=int(data.get("max_messages", 500)),
             allow_trash=allow_trash,
         )
+
+    def to_data(self) -> dict[str, Any]:
+        """Round-trippable plain data, for writing the YAML file back out."""
+        rules = []
+        for rule in self.rules:
+            item: dict[str, Any] = {"name": rule.name}
+            if not rule.enabled:
+                item["enabled"] = False
+            item["match"] = rule.conditions.raw
+            item["actions"] = rule.actions.to_data()
+            rules.append(item)
+        return {
+            "search": self.search,
+            "max_messages": self.max_messages,
+            "allow_trash": self.allow_trash,
+            "rules": rules,
+        }
+
+    def save(self, path: str) -> None:
+        with open(path, "w", encoding="utf-8") as handle:
+            yaml.safe_dump(
+                self.to_data(),
+                handle,
+                allow_unicode=True,
+                sort_keys=False,
+                default_flow_style=False,
+            )
 
     def plan_for(self, message: Message, now: datetime | None = None) -> Plan:
         plan = Plan(message=message)

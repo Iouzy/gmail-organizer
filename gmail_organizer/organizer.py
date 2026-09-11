@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING
 from .message import Message
 from .rules import Plan, RuleSet
 
+# Marks a label that a dry run would have to create before it could be applied.
+NEW_LABEL_PREFIX = "<new:"
+
 if TYPE_CHECKING:  # keeps the rule engine importable without the Google SDK
     from .gmail_client import GmailClient
 
@@ -65,7 +68,7 @@ class Organizer:
                 report.trashed += 1
 
         if not self.dry_run:
-            self._apply(report.changes)
+            self.apply(report.changes)
         return report
 
     def _resolve(self, plan: Plan) -> Change:
@@ -92,6 +95,13 @@ class Organizer:
                 change.remove_names.append(name)
         return change
 
+    def _materialize_labels(self, changes: list[Change]) -> None:
+        """Create the labels a dry-run plan only pencilled in as <new:Name>."""
+        for change in changes:
+            for index, label_id in enumerate(change.add_label_ids):
+                if label_id.startswith(NEW_LABEL_PREFIX):
+                    change.add_label_ids[index] = self.client.ensure_label(change.add_names[index])
+
     def _label_id(self, name: str, create: bool) -> str | None:
         resolved = self.client.resolve_label(name)
         if resolved:
@@ -100,10 +110,12 @@ class Organizer:
             return self.client.ensure_label(name)
         if create:
             # Dry run: the label does not exist yet, so report it by name.
-            return f"<new:{name}>"
+            return f"{NEW_LABEL_PREFIX}{name}>"
         return None
 
-    def _apply(self, changes: list[Change]) -> None:
+    def apply(self, changes: list[Change]) -> None:
+        """Execute a list of changes, grouping identical ones into one call."""
+        self._materialize_labels(changes)
         to_trash = [c.message.id for c in changes if c.trash]
         grouped: dict[tuple[tuple[str, ...], tuple[str, ...]], list[str]] = defaultdict(list)
         for change in changes:
